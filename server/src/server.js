@@ -3,9 +3,13 @@ var express = require('express');
 // Creates an Express server.
 var app = express();
 // Parses response bodies.
+var jwt = require('jsonwebtoken');
+var secretKey = "7d672134-7365-40d8-acd6-ca6a82728471";
 var bodyParser = require('body-parser');
 var StatusUpdateSchema = require('./schemas/statusupdate.json');
 var CommentSchema = require('./schemas/comment.json');
+var UserSchema = require('./schemas/user.json');
+var LoginSchema = require('./schemas/login.json');
 var validate = require('express-jsonschema').validate;
 var mongo_express = require('mongo-express/lib/middleware');
 // Use default Mongo Express configuration
@@ -14,6 +18,7 @@ var MongoClient = require('mongodb').MongoClient;
 var ObjectID = require('mongodb').ObjectID;
 var ResetDatabase = require('./resetdatabase');
 var url = 'mongodb://localhost:27017/facebook';
+var bcrypt = require('bcryptjs');
 
 /**
  * Strips a password from a user object.
@@ -185,10 +190,7 @@ MongoClient.connect(url, function(err, db) {
     try {
       // Cut off "Bearer " from the header value.
       var token = authorizationLine.slice(7);
-      // Convert the base64 string to a UTF-8 string.
-      var regularString = new Buffer(token, 'base64').toString('utf8');
-      // Convert the UTF-8 string into a JavaScript object.
-      var tokenObj = JSON.parse(regularString);
+      var tokenObj = jwt.verify(token, secretKey);
       var id = tokenObj['id'];
       // Check that id is a string.
       if (typeof id === 'string') {
@@ -690,6 +692,128 @@ MongoClient.connect(url, function(err, db) {
     console.log("Resetting database...");
     ResetDatabase(db, function() {
       res.send();
+    });
+  });
+
+  app.post('/login', validate({ body: LoginSchema }), function(req, res) {
+    var loginData = req.body;
+    var pw = loginData.password;
+    // Get the user with the given email address.
+    // Standardize the email address before searching.
+    var email = loginData.email.trim().toLowerCase();
+    console.log(email);
+    db.collection('users').findOne({ email: email },
+      function(err, user) {
+          if (err) {
+            sendDatabaseError(res, err);
+          } else if (user === null) {
+            // No user found with given email address.
+            // 401 Unauthorized is the correct code to use in this case.
+            res.status(401).end();
+          } else {
+            // User found!
+            // Use bcrypt to check the password against the
+            // recorded hash and salt. Note that user.password
+            // in the database contains a string with both the
+            // hash and salt -- this is why bcrypt is incredibly
+            // easy to use!
+            bcrypt.compare(pw, user.password, function(err, success) {
+              if (err) {
+                // An internal error occurred. This could only possibly
+                // happen if the recorded hash+salt in the database is
+                // malformed, or bcryptjs has a bug.
+                res.status(500).end();
+              } else if (success) {
+                // Successful login!
+                // PUT CODE TO GENERATE JSON WEB TOKEN HERE
+                // Successful login!
+                // Create a token that is valid for a week.
+                jwt.sign({
+                  id: user._id
+                }, secretKey, { expiresIn: "7 days" },
+                function(token) {
+                  // We have the token.
+                  // Remove the 'password' field from the user
+                  // document before sending it to the client.
+                  stripPassword(user);
+                  // Send the user document and the token to the client.
+                  res.send({
+                    user: user,
+                    token: token
+                  });
+                });
+              } else {
+                // Invalid password; 'success' was false.
+                res.status(401).end();
+              }
+            })
+            // Now we can check the password here...
+          }
+    });
+  });
+
+  /**
+   * Create a user account.
+   */
+  app.post('/user', validate({ body: UserSchema }), function(req, res) {
+    var user = req.body;
+    var password = user.password;
+    user.email = user.email.trim().toLowerCase();
+    if (password.length < 5) {
+     // Bad request
+     return res.status(400).end();
+    }
+    // bcrypt.hash will generate a salt for us and
+    // hash the password with the salt
+    bcrypt.hash(password, 10, function(err, hash) {
+      if (err) {
+        // bcrypt had some sort of error!
+        res.status(500).end();
+      } else {
+        // hash contains **both the hash and the salt**
+        // concatenated together. Now, we can store
+        // this into the database!
+        // Replace the plaintext password with the
+        // salt+hash string that bcrypt gave us.
+        user.password = hash;
+        // Create a new user
+        db.collection('users').insertOne(user, function(err, result) {
+          if (err) {
+            // This will happen if there's already a
+            // user with the same email address.
+            return sendDatabaseError(res, err);
+          }
+          var userId = result.insertedId;
+          // Create the user's feed.
+          db.collection('feeds').insertOne({
+            contents: []
+          }, function(err, result) {
+            if (err) {
+              // In a production app, we'd probably
+              // also want to remove the user
+              // we just created if this fails.
+              return sendDatabaseError(res, err);
+            }
+
+            // Update the user document with the new feed's ID.
+            var feedId = result.insertedId;
+            // Set the reference for the user's feed.
+            db.collection('users').updateOne({
+              _id: userId
+            }, {
+              $set: {
+                feed: feedId
+              }
+            }, function(err) {
+              if (err) {
+                return sendDatabaseError(res, err);
+              }
+              // Send a blank response to indicate success!
+              res.send();
+            })
+          });
+        });
+      }
     });
   });
 

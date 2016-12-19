@@ -2,12 +2,14 @@
  * Stores authentication credentials.
  */
 
-var token = 'eyJpZCI6IjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwNCJ9';
-// User document for the currently logged-in user.
-var user = {
-  _id: "000000000000000000000004",
-  fullName: "John Vilk"
-};
+// var token = 'eyJpZCI6IjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwNCJ9';
+// // User document for the currently logged-in user.
+// var user = {
+//   _id: "000000000000000000000004",
+//   fullName: "John Vilk"
+// };
+var token = null;
+var user = null;
 
 /**
  * Get the token of the currently authenticated user.
@@ -53,7 +55,7 @@ export function updateCredentials(newUser, newToken) {
  */
 export function isUserLoggedIn() {
   // Replace later.
-  return true;
+  return user !== null;
 }
 
 /**
@@ -61,5 +63,6 @@ export function isUserLoggedIn() {
  * You will implement this during the workshop.
  */
 export function logout() {
-  
+  token = null;
+  user = null;
 }
