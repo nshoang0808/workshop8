@@ -20,6 +20,19 @@ var ResetDatabase = require('./resetdatabase');
 var url = 'mongodb://localhost:27017/facebook';
 var bcrypt = require('bcryptjs');
 
+// Import Node's HTTPS API.
+var https = require('https');
+// Import Node's file system API.
+var fs = require('fs');
+var path = require('path');
+// Read in the private key
+// __dirname is a magic variable that contains
+// the directory that contains server.js. path.join
+// joins two file paths together.
+var privateKey = fs.readFileSync(path.join(__dirname, 'key.pem'));
+// Read in the certificate, which contains the
+// public key and signature
+var certificate = fs.readFileSync(path.join(__dirname, 'key.crt'));
 /**
  * Strips a password from a user object.
  */
@@ -701,7 +714,6 @@ MongoClient.connect(url, function(err, db) {
     // Get the user with the given email address.
     // Standardize the email address before searching.
     var email = loginData.email.trim().toLowerCase();
-    console.log(email);
     db.collection('users').findOne({ email: email },
       function(err, user) {
           if (err) {
@@ -834,4 +846,9 @@ MongoClient.connect(url, function(err, db) {
   app.listen(3000, function () {
     console.log('Example app listening on port 3000!');
   });
+  //Starts an https server on port 3000!
+  // https.createServer({key: privateKey, cert: certificate},
+  //                    app).listen(3000, function () {
+  //   console.log('Example app listening on port 3000!');
+  // });
 });
