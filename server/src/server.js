@@ -842,13 +842,13 @@ MongoClient.connect(url, function(err, db) {
     }
   });
 
-  // Starts the server on port 3000!
-  app.listen(3000, function () {
-    console.log('Example app listening on port 3000!');
-  });
-  //Starts an https server on port 3000!
-  // https.createServer({key: privateKey, cert: certificate},
-  //                    app).listen(3000, function () {
+  // // Starts the server on port 3000!
+  // app.listen(3000, function () {
   //   console.log('Example app listening on port 3000!');
   // });
+  //Starts an https server on port 3000!
+  https.createServer({key: privateKey, cert: certificate},
+                     app).listen(3000, function () {
+    console.log('Example app listening on port 3000!');
+  });
 });
